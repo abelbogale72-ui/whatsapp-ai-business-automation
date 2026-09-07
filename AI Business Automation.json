@@ -1,0 +1,372 @@
+{
+  "name": "AI Business Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -256,
+        -32
+      ],
+      "id": "9157c580-1c0d-46c7-b6c7-cdc7f3b793c8",
+      "name": "Webhook",
+      "webhookId": "c673788c-089e-4990-9e3a-b28060bd2a0d"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5c0925c7-6ebb-47bc-bcb5-c089083863fd",
+              "name": "phone",
+              "value": "={{ $json.body.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "c402cc9e-cdcb-46a3-a99c-730086422011",
+              "name": "Message",
+              "value": "={{ $json.body.message }}",
+              "type": "string"
+            },
+            {
+              "id": "5964123c-1f81-4a78-882a-76aae33a957d",
+              "name": "Message_type",
+              "value": "={{ $json.body.message_type }}",
+              "type": "string"
+            },
+            {
+              "id": "0392e94d-e60a-4042-b71e-64fd93c7eb82",
+              "name": "timestamp",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -96,
+        -32
+      ],
+      "id": "2f85670b-b860-45c8-90be-de43092e1096",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze this incoming WhatsApp message and extract the user's request.\n\nPhone: {{ $('Webhook').item.json.body.phone }}\nMessage: {{ $('Webhook').item.json.body.message }}\nMessage Type: {{ $('Webhook').item.json.body.message_type }}\n\nReturn the information according to the Structured Output Parser schema.\nDo not invent missing information.",
+        "options": {
+          "systemMessage": "You are an AI extraction agent for a WhatsApp business automation system.\n\nYour job is to analyze a user's message and extract structured information.\n\nReturn ONLY valid JSON. Do not include markdown, explanations, or extra text.\n\nOutput format:\n\n{\n\"intent\": \"\",\n\"name\": \"\",\n\"location\": \"\",\n\"category\": \"\",\n\"requirements\": [],\n\"budget\": \"\",\n\"language\": \"English\",\n\"summary\": \"\",\n\"needs_human\": false\n}\n\nRules:\n\n* Detect the user's intent.\n* Extract locations, names, categories, and budget if present.\n* Put important details inside the requirements array.\n* If information is missing, use an empty string or an empty array.\n* Set needs_human to true only if the request cannot be handled automatically.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        64,
+        -32
+      ],
+      "id": "dce4058d-4bf1-4127-bf0f-2e78772ac749",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        16,
+        192
+      ],
+      "id": "6277f22f-9e28-4188-a5db-fd016ed3a727",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "mCnhA083ZtK8lESW",
+          "name": "Groq account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "5"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        160,
+        192
+      ],
+      "id": "d759f550-a5cb-48b0-a8e7-5fc8a67ae041",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS conversations (\n    id SERIAL PRIMARY KEY,\n    phone VARCHAR(50),\n    message TEXT,\n    message_type VARCHAR(20),\n    intent VARCHAR(100),\n    name VARCHAR(255),\n    location VARCHAR(255),\n    category VARCHAR(100),\n    requirements JSONB,\n    budget VARCHAR(100),\n    language VARCHAR(50),\n    summary TEXT,\n    needs_human BOOLEAN DEFAULT FALSE,\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        256,
+        -208
+      ],
+      "id": "6af7fe3c-e3c0-42b3-ba97-98ca1d05ffd7",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "Qp027zCFFTAO83UO",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversations (\n    phone,\n    message,\n    message_type,\n    intent,\n    name,\n    location,\n    category,\n    requirements,\n    budget,\n    language,\n    summary,\n    needs_human\n)\nVALUES (\n    '{{ $json.phone }}',\n    '{{ $(\"Parse AI Output\").item.json.message }}',\n    '{{ $(\"Parse AI Output\").item.json.message_type }}',\n    '{{ $(\"Parse AI Output\").item.json.intent }}',\n    '{{ $(\"Parse AI Output\").item.json.name }}',\n    '{{ $(\"Parse AI Output\").item.json.location }}',\n    '{{ $(\"Parse AI Output\").item.json.category }}',\n    '{{ JSON.stringify($(\"Parse AI Output\").item.json.requirements) }}'::jsonb,\n    '{{ $(\"Parse AI Output\").item.json.budget }}',\n    '{{ $(\"Parse AI Output\").item.json.language }}',\n    '{{ $(\"Parse AI Output\").item.json.summary }}',\n    {{ $(\"Parse AI Output\").item.json.needs_human }}\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        896,
+        96
+      ],
+      "id": "ee178431-e976-4f7f-a6f0-e2e815fe0cfe",
+      "name": "AI result.",
+      "credentials": {
+        "postgres": {
+          "id": "Qp027zCFFTAO83UO",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, phone, message, created_at\nFROM conversations\nWHERE phone = '{{ $json.phone }}'\n  AND message = '{{ $('Edit Fields').item.json.Message }}'\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        592,
+        -32
+      ],
+      "id": "e77ead35-b5f7-4482-b8ce-7c7391576f1f",
+      "name": "Check Duplicate",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "Qp027zCFFTAO83UO",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "43ada26b-4b66-4848-9e50-95e6b3d3e3b8",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": 2,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        768,
+        -32
+      ],
+      "id": "90baa28d-78b4-4018-8522-b1b966d9fbd2",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Request received and processed successfully.\",\n  \"data\": {\n    \"intent\": \"{{ $('Parse AI Output').item.json.intent }}\",\n    \"location\": \"{{ $('Parse AI Output').item.json.location }}\",\n    \"category\": \"{{ $('Parse AI Output').item.json.category }}\",\n    \"summary\": \"{{ $('Parse AI Output').item.json.summary }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1056,
+        -48
+      ],
+      "id": "85a082c6-abf4-4ec6-a6a5-2b1342bae374",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output;\n\nlet data;\n\nif (typeof raw === 'string') {\n  let text = raw.trim();\n\n  // Remove markdown JSON fences if the model added them\n  text = text.replace(/^```json\\s*/i, '');\n  text = text.replace(/^```\\s*/i, '');\n  text = text.replace(/\\s*```$/i, '');\n\n  data = JSON.parse(text);\n} else {\n  data = raw;\n}\n\nreturn {\n  json: {\n    phone: $('Edit Fields').item.json.phone,\n    message: $('Edit Fields').first().json.Message,\n    message_type: $('Edit Fields').first().json.Message_type,\n\n    intent: data.intent || '',\n    name: data.name || '',\n    location: data.location || '',\n    category: data.category || '',\n    requirements: data.requirements || [],\n    budget: data.budget || '',\n    language: data.language || '',\n    summary: data.summary || '',\n    needs_human: data.needs_human || false\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -32
+      ],
+      "id": "bea8a40a-e3c9-44f0-94c3-0b4f3ddfb994",
+      "name": "Parse AI Output"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        []
+      ]
+    },
+    "AI result.": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI result.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        []
+      ]
+    },
+    "Parse AI Output": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "b2f36fa3-7d22-4830-a39f-be9f744b884b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "21ffbc9fe4d682285230f68e6ce0a88bc6c175acfc69677e5dd2dfde9641341b"
+  },
+  "nodeGroups": [],
+  "id": "AnkRmMafNSLeFTVq",
+  "tags": []
+}
